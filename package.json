@@ -1,0 +1,13 @@
+{
+  "name": "devora",
+  "version": "1.0.0",
+  "description": "Jira sprint board + Claude Code launcher",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "https-proxy-agent": "^5.0.1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "jira": {
+    "baseUrl": "https://yourcompany.atlassian.net",
+    "email": "you@company.com",
+    "apiToken": "your-jira-api-token-here",
+    "boardId": 123
+  },
+  "azure": {
+    "orgUrl": "https://dev.azure.com/yourorg",
+    "pat": "your-azure-pat-here",
+    "watches": [
+      { "project": "my-project", "repoId": "uuid-here", "repoName": "my-repo", "branch": "master" }
+    ]
+  },
+  "reposPath": "C:/javadev/repos",
+  "port": 3000,
+  "proxy": "http://proxy-host:port"
+}

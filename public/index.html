@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Devora</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="js/ui.js"></script>
+  <script defer src="js/api.js"></script>
+  <script defer src="js/settings.js"></script>
+  <script defer src="js/dev.js"></script>
+  <script defer src="js/azure.js"></script>
+  <script defer src="app.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    [x-cloak] { display: none; }
+    html, body { height: 100%; overflow: hidden; }
+  </style>
+</head>
+<body
+  class="bg-neutral-950 text-neutral-100 h-screen flex flex-col overflow-hidden"
+  x-data="app()"
+  x-init="init()"
+  @keydown.window="handleKeydown($event)"
+>
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="h-[50px] shrink-0 flex items-center gap-4 px-5 border-b border-neutral-800 bg-neutral-900 z-10">
+
+    <!-- Left: logo + sprint badge -->
+    <div class="flex items-center gap-3 shrink-0">
+      <strong class="text-sm tracking-widest font-semibold">Devora</strong>
+      <span
+        x-text="sprint ? sprint.name : (loading ? 'Loading...' : 'No active sprint')"
+        class="text-xs px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400"
+      ></span>
+    </div>
+
+    <!-- Centre: Azure build bubbles -->
+    <div class="flex items-center gap-5 flex-1 overflow-x-auto min-w-0">
+
+      <!-- Loading spinner -->
+      <div x-show="azureLoading && azureStatus.length === 0" class="flex items-center gap-1.5">
+        <div class="w-2 h-2 rounded-full bg-neutral-600 animate-pulse"></div>
+        <div class="w-2 h-2 rounded-full bg-neutral-600 animate-pulse" style="animation-delay:.15s"></div>
+        <div class="w-2 h-2 rounded-full bg-neutral-600 animate-pulse" style="animation-delay:.3s"></div>
+      </div>
+
+      <!-- One group per watch -->
+      <template x-for="watch in azureStatus" :key="watch.repoName + '/' + watch.branch">
+        <div class="flex items-center gap-1.5 shrink-0">
+          <!-- label -->
+          <span
+            class="text-[0.62rem] text-neutral-500 whitespace-nowrap"
+            x-text="watch.repoName + '/' + watch.branch"
+          ></span>
+          <!-- bubbles or dash if no build -->
+          <template x-if="watch.stages && watch.stages.length">
+            <a
+              :href="watch.buildUrl || '#'"
+              target="_blank"
+              rel="noopener"
+              class="flex items-center gap-0.5"
+              title="Open build in Azure"
+            >
+              <template x-for="stage in watch.stages" :key="stage.name">
+                <div
+                  :class="bubbleClass(stage.colour)"
+                  :title="stage.name"
+                  class="w-2.5 h-2.5 rounded-full cursor-pointer hover:scale-125 transition-transform"
+                ></div>
+              </template>
+            </a>
+          </template>
+          <template x-if="!watch.stages || !watch.stages.length">
+            <span class="text-[0.62rem] text-neutral-700">—</span>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <!-- Right: sprint stats + settings -->
+    <div class="flex items-center gap-3 shrink-0">
+      <span
+        class="text-xs text-neutral-500"
+        x-text="stats"
+        x-show="!loading && issues.length > 0"
+      ></span>
+      <button
+        @click="openSettings()"
+        title="Settings"
+        class="text-neutral-500 hover:text-neutral-200 text-lg leading-none p-1 transition-colors"
+      >&#9881;</button>
+    </div>
+  </header>
+
+  <!-- ── Body: sidebar + detail ──────────────────────────── -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ── Sidebar ─────────────────────────────────────────── -->
+    <aside class="w-72 shrink-0 border-r border-neutral-800 flex flex-col overflow-hidden bg-neutral-900">
+
+      <!-- Search -->
+      <div class="px-3 py-2 border-b border-neutral-800">
+        <input
+          type="search"
+          x-model="searchQuery"
+          placeholder="Filter tickets..."
+          autocomplete="off"
+          class="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-neutral-200 placeholder-neutral-500 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
+        />
+      </div>
+
+      <!-- Ticket list -->
+      <div class="flex-1 overflow-y-auto px-2 py-1">
+
+        <div x-show="loading" class="text-center text-neutral-500 text-sm py-8">Loading sprint...</div>
+
+        <div
+          x-show="!loading && filteredIssues.length === 0"
+          class="text-center text-neutral-500 text-sm py-8"
+        >No matching tickets</div>
+
+        <template x-for="[status, tickets] in groupedIssues" :key="status">
+          <div>
+            <div class="flex items-center gap-1.5 px-1 pt-3 pb-1">
+              <span class="text-[0.65rem] font-bold uppercase tracking-widest text-neutral-500" x-text="status"></span>
+              <span class="text-[0.65rem] text-neutral-600" x-text="tickets.length"></span>
+            </div>
+
+            <template x-for="issue in tickets" :key="issue.key">
+              <div
+                @click="selectTicket(issue.key)"
+                :class="currentIssue?.key === issue.key
+                  ? 'bg-blue-950/60 border-blue-800/60'
+                  : 'border-transparent hover:bg-neutral-800'"
+                class="cursor-pointer rounded-md border px-2.5 py-2 mb-1 transition-colors"
+              >
+                <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                  <span
+                    :class="typeClass(issue.fields.issuetype?.name)"
+                    class="inline-block text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-px rounded"
+                    x-text="issue.fields.issuetype?.name || 'Task'"
+                  ></span>
+                  <span class="font-mono text-[0.7rem] font-semibold text-blue-400 mr-auto" x-text="issue.key"></span>
+                  <span
+                    :class="statusClass(issue.fields.status?.name)"
+                    class="inline-block text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-px rounded"
+                    x-text="issue.fields.status?.name || ''"
+                  ></span>
+                </div>
+                <div class="text-[0.8rem] leading-snug text-neutral-300 line-clamp-2" x-text="issue.fields.summary || ''"></div>
+                <div class="flex items-center gap-1.5 mt-1.5">
+                  <span
+                    x-show="issue.fields.customfield_10016 != null"
+                    x-text="issue.fields.customfield_10016 + 'p'"
+                    class="text-[0.67rem] px-1.5 py-px rounded bg-neutral-800 text-neutral-500"
+                  ></span>
+                  <span
+                    x-show="issue.fields.assignee"
+                    :title="issue.fields.assignee?.displayName"
+                    x-text="initials(issue.fields.assignee?.displayName)"
+                    class="ml-auto w-5 h-5 rounded-full bg-blue-700 text-white text-[0.55rem] font-bold flex items-center justify-center shrink-0"
+                  ></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </aside>
+
+    <!-- ── Detail panel ───────────────────────────────────── -->
+    <main x-ref="detailPanel" class="flex-1 overflow-y-auto bg-neutral-950">
+
+      <div x-show="detailState === 'empty'" class="h-full flex items-center justify-center text-neutral-600 text-sm">Select a ticket</div>
+      <div x-show="detailState === 'loading'" class="h-full flex items-center justify-center text-neutral-500 text-sm">Loading...</div>
+      <div x-show="detailState === 'error'" class="p-6 text-red-400 text-sm" x-text="'Error: ' + (currentIssue?.error || 'Unknown error')"></div>
+
+      <div x-show="detailState === 'content'" class="px-8 py-6 w-full" x-cloak>
+
+        <!-- Topbar -->
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span
+              :class="typeClass(currentIssue?.fields?.issuetype?.name)"
+              class="inline-block text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-px rounded"
+              x-text="currentIssue?.fields?.issuetype?.name || ''"
+            ></span>
+            <span class="font-mono text-[0.8rem] font-semibold text-blue-400" x-text="currentIssue?.key || ''"></span>
+          </div>
+          <a :href="browseUrl" target="_blank" rel="noopener" class="text-xs text-neutral-500 hover:text-neutral-200 transition-colors no-underline">&#8599; Open in Jira</a>
+        </div>
+
+        <!-- Title -->
+        <h2 class="text-xl font-semibold leading-snug mt-2 mb-5" x-text="currentIssue?.fields?.summary || ''"></h2>
+
+        <!-- Meta grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-neutral-900 rounded-lg px-4 py-3 mb-6">
+          <div>
+            <div class="text-[0.62rem] font-bold uppercase tracking-widest text-neutral-500 mb-1">Status</div>
+            <span :class="statusClass(currentIssue?.fields?.status?.name)" class="inline-block text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-px rounded" x-text="currentIssue?.fields?.status?.name || '—'"></span>
+          </div>
+          <div>
+            <div class="text-[0.62rem] font-bold uppercase tracking-widest text-neutral-500 mb-1">Priority</div>
+            <span class="text-[0.8rem] text-neutral-300" x-text="currentIssue?.fields?.priority?.name || '—'"></span>
+          </div>
+          <div>
+            <div class="text-[0.62rem] font-bold uppercase tracking-widest text-neutral-500 mb-1">Assignee</div>
+            <span class="text-[0.8rem] text-neutral-300" x-text="currentIssue?.fields?.assignee?.displayName || 'Unassigned'"></span>
+          </div>
+          <div>
+            <div class="text-[0.62rem] font-bold uppercase tracking-widest text-neutral-500 mb-1">Points</div>
+            <span class="text-[0.8rem] text-neutral-300" x-text="currentIssue?.fields?.customfield_10016 ?? '—'"></span>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="mb-6">
+          <div class="text-[0.72rem] font-bold uppercase tracking-widest text-neutral-500 mb-2">Description</div>
+          <div
+            class="desc-body text-sm leading-relaxed bg-neutral-900 rounded-lg p-4 max-h-72 overflow-y-auto"
+            x-html="currentIssue?.renderedFields?.description || '<em class=\'text-neutral-500\'>No description</em>'"
+          ></div>
+        </div>
+
+        <!-- Comments -->
+        <div x-show="comments.length > 0" class="mb-6">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="text-[0.72rem] font-bold uppercase tracking-widest text-neutral-500">Comments</div>
+            <span class="text-[0.65rem] text-neutral-600" x-text="comments.length"></span>
+            <span x-show="selectedComments.length > 0" class="text-[0.65rem] text-blue-400" x-text="selectedComments.length + ' selected for AI'"></span>
+          </div>
+          <div class="flex flex-col gap-2">
+            <template x-for="comment in comments" :key="comment.id">
+              <div
+                @click="toggleComment(comment.id)"
+                :class="selectedComments.includes(comment.id) ? 'border-blue-700/60 bg-blue-950/20' : 'border-neutral-800 hover:border-neutral-700'"
+                class="rounded-lg border px-3 py-2.5 cursor-pointer transition-colors select-none"
+              >
+                <div class="flex items-center gap-2 mb-1.5">
+                  <div :class="selectedComments.includes(comment.id) ? 'bg-blue-600 border-blue-600' : 'bg-transparent border-neutral-600'" class="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-colors">
+                    <svg x-show="selectedComments.includes(comment.id)" class="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
+                      <path d="M1 4l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </div>
+                  <span class="w-5 h-5 rounded-full bg-neutral-700 text-[0.5rem] font-bold text-neutral-300 flex items-center justify-center shrink-0" x-text="initials(comment.author?.displayName)"></span>
+                  <span class="text-xs font-semibold text-neutral-300" x-text="comment.author?.displayName || 'Unknown'"></span>
+                  <span class="text-[0.65rem] text-neutral-600 ml-auto" x-text="new Date(comment.created).toLocaleDateString()"></span>
+                </div>
+                <div class="desc-body text-xs leading-relaxed text-neutral-400 max-h-20 overflow-hidden" x-html="comment.renderedBody"></div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Screenshots -->
+        <template x-if="imageAttachments.length > 0">
+          <div class="mb-6">
+            <div class="text-[0.72rem] font-bold uppercase tracking-widest text-neutral-500 mb-2">Screenshots</div>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="att in imageAttachments" :key="att.content">
+                <a :href="proxyUrl(att.content)" target="_blank" :title="att.filename" class="block rounded-md overflow-hidden border border-neutral-800 hover:border-blue-600 transition-colors">
+                  <img :src="proxyUrl(att.content)" :alt="att.filename" class="h-24 w-auto max-w-[180px] object-cover block" />
+                </a>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Action bar -->
+        <div class="border-t border-neutral-800 pt-5 mt-2 flex flex-col gap-4">
+
+          <!-- Mode toggle -->
+          <div class="flex w-fit rounded-md border border-neutral-700 overflow-hidden">
+            <button @click="devMode = 'dev'" :class="devMode === 'dev' ? 'bg-blue-950/60 text-blue-300 font-semibold' : 'text-neutral-500 hover:text-neutral-300'" class="text-xs px-4 py-1.5 border-r border-neutral-700 transition-colors">&#9654; Dev</button>
+            <button @click="devMode = 'plan'" :class="devMode === 'plan' ? 'bg-blue-950/60 text-blue-300 font-semibold' : 'text-neutral-500 hover:text-neutral-300'" class="text-xs px-4 py-1.5 transition-colors">&#128196; Plan</button>
+          </div>
+
+          <!-- Instructions -->
+          <div class="w-full">
+            <label class="block text-xs font-semibold text-neutral-400 mb-1">Additional instructions for AI</label>
+            <textarea x-model="instructions" rows="3" placeholder="e.g. Use the existing AuthService, don't modify the DB schema..." class="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 resize-y transition"></textarea>
+          </div>
+
+          <!-- Repo select + Start button -->
+          <div class="flex flex-wrap items-end gap-3">
+            <div class="flex-1 min-w-[160px]">
+              <label class="block text-xs font-semibold text-neutral-400 mb-1">Project repo</label>
+              <select x-model="selectedRepo" class="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition">
+                <option value="">— select repo —</option>
+                <template x-for="repo in repos" :key="repo">
+                  <option :value="repo" x-text="repo"></option>
+                </template>
+              </select>
+              <label class="flex items-center gap-1.5 mt-1.5 cursor-pointer select-none">
+                <input type="checkbox" x-model="useOnemFrontend" class="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
+                <span :class="useOnemFrontend ? 'text-blue-400' : 'text-neutral-500'" class="text-[0.72rem] transition-colors">ONEM frontend skill</span>
+              </label>
+            </div>
+            <div class="relative group inline-flex">
+              <button
+                @click="startDev()"
+                :disabled="!selectedRepo || devResult?.launching === true"
+                class="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2 rounded-md whitespace-nowrap transition-colors"
+                x-text="devResult?.launching === true ? 'Launching...' : (devMode === 'plan' ? '📄 Start Plan' : '▶ Start Dev')"
+              ></button>
+              <div
+                :class="(!selectedRepo || devResult?.launching === true) ? 'group-hover:opacity-100' : 'hidden'"
+                class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs rounded whitespace-nowrap pointer-events-none opacity-0 transition-opacity z-10"
+                x-text="!selectedRepo ? 'Select a repo first' : 'Launch in progress...'"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Dev result -->
+          <div x-show="devResult && !devResult.launching" class="text-sm">
+            <div x-show="devResult?.error" class="text-red-400" x-text="'Error: ' + devResult?.error"></div>
+            <div x-show="devResult?.ok" class="text-green-400">&#10003; Claude Code launched in <strong x-text="selectedRepo"></strong></div>
+            <div x-show="devResult && !devResult.ok && !devResult.error">
+              <span class="text-neutral-500">Git Bash not found &mdash; run manually:</span>
+              <pre class="mt-2 bg-neutral-900 border border-neutral-800 rounded-md p-3 text-xs text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all" x-text="devResult?.manual || ''"></pre>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Settings modal ──────────────────────────────────── -->
+  <div
+    x-show="settingsOpen"
+    x-cloak
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    @click.self="settingsOpen = false"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+    style="display:none"
+  >
+    <div
+      x-transition:enter="transition ease-out duration-150"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition ease-in duration-100"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+      class="bg-neutral-900 border border-neutral-800 rounded-xl w-[480px] flex flex-col shadow-2xl max-h-[85vh]"
+      @click.stop
+    >
+      <!-- Modal header -->
+      <div class="flex items-center justify-between px-6 pt-5 pb-0 shrink-0">
+        <strong class="text-sm font-semibold">Settings</strong>
+        <button @click="settingsOpen = false" class="text-neutral-500 hover:text-neutral-200 text-sm leading-none transition-colors" title="Close">&#10005;</button>
+      </div>
+
+      <!-- Tab strip -->
+      <div class="flex gap-0 px-6 mt-4 border-b border-neutral-800 shrink-0">
+        <button
+          @click="settingsTab = 'jira'"
+          :class="settingsTab === 'jira'
+            ? 'border-b-2 border-blue-500 text-neutral-100'
+            : 'border-b-2 border-transparent text-neutral-500 hover:text-neutral-300'"
+          class="text-xs font-semibold px-4 py-2 -mb-px transition-colors"
+        >Jira</button>
+        <button
+          @click="openAzureTab()"
+          :class="settingsTab === 'azure'
+            ? 'border-b-2 border-blue-500 text-neutral-100'
+            : 'border-b-2 border-transparent text-neutral-500 hover:text-neutral-300'"
+          class="text-xs font-semibold px-4 py-2 -mb-px transition-colors"
+        >Azure DevOps</button>
+      </div>
+
+      <!-- Tab content -->
+      <div class="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
+
+        <!-- ── Jira tab ── -->
+        <template x-if="settingsTab === 'jira'">
+          <div class="flex flex-col gap-4">
+
+            <!-- Board select -->
+            <div class="flex flex-col gap-1">
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Sprint board</label>
+              <select x-model="boardId" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition">
+                <option value="">Loading boards...</option>
+                <template x-for="board in boards" :key="board.id">
+                  <option :value="String(board.id)" x-text="board.name + ' (' + board.id + ')'"></option>
+                </template>
+              </select>
+            </div>
+
+            <!-- Repos path -->
+            <div class="flex flex-col gap-1">
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Repos folder</label>
+              <input type="text" x-model="reposPath" placeholder="C:/javadev/repos" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+            </div>
+
+            <!-- API token -->
+            <div class="flex flex-col gap-1">
+              <div class="flex items-baseline justify-between">
+                <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Jira API token</label>
+                <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener" class="text-[0.68rem] text-blue-400 hover:text-blue-300 transition-colors">Get token ↗</a>
+              </div>
+              <input type="password" x-model="apiToken" :placeholder="hasToken ? 'Leave blank to keep current' : 'Enter your Jira API token'" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+            </div>
+
+            <!-- Commit suggestion -->
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Suggest commit on finish</label>
+                <button type="button" @click="suggestCommit = !suggestCommit" :class="suggestCommit ? 'bg-blue-600' : 'bg-neutral-700'" class="relative w-9 h-5 rounded-full transition-colors focus:outline-none shrink-0">
+                  <span :class="suggestCommit ? 'translate-x-[18px]' : 'translate-x-[2px]'" class="block w-4 h-4 bg-white rounded-full shadow transition-transform"></span>
+                </button>
+              </div>
+              <div x-show="suggestCommit">
+                <textarea x-model="commitFormat" rows="3" placeholder="e.g. feat(or fix): #TICKET-123: short title&#10;&#10;Brief description of what changed." class="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 resize-y transition"></textarea>
+              </div>
+            </div>
+
+          </div>
+        </template>
+
+        <!-- ── Azure tab ── -->
+        <template x-if="settingsTab === 'azure'">
+          <div class="flex flex-col gap-4">
+
+            <!-- Auth section -->
+            <div class="flex flex-col gap-1">
+              <div class="flex items-baseline justify-between">
+                <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Personal access token</label>
+                <a href="https://dev.azure.com/rvaonem/_usersSettings/tokens" target="_blank" rel="noopener"
+                  class="text-[0.68rem] text-blue-400 hover:text-blue-300 transition-colors">Get token ↗</a>
+              </div>
+              <input type="password" x-model="azurePat"
+                :placeholder="azureHasPat ? 'Leave blank to keep current' : 'Enter your Azure PAT'"
+                autocomplete="off"
+                class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+            </div>
+
+            <!-- Divider: Add watch -->
+            <div class="border-t border-neutral-800 pt-1">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Add watch</span>
+                <button
+                  @click="loadAzureProjects()"
+                  :disabled="azureProjectsLoading"
+                  class="text-[0.68rem] text-blue-400 hover:text-blue-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  x-text="azureProjectsLoading ? 'Loading...' : (azureProjects.length ? '↻ Reload projects' : 'Load projects')"
+                ></button>
+              </div>
+
+              <!-- Step 1: Project -->
+              <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-1">
+                  <label class="text-[0.65rem] text-neutral-500 uppercase tracking-widest">Project</label>
+                  <select x-model="azurePickProject" @change="onAzureProjectSelect()"
+                    :disabled="!azureProjects.length"
+                    class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition disabled:opacity-40">
+                    <option value="" x-text="azureProjects.length ? '— select project —' : '— load projects first —'"></option>
+                    <template x-for="p in azureProjects" :key="p.id">
+                      <option :value="p.name" x-text="p.name"></option>
+                    </template>
+                  </select>
+                </div>
+
+                <!-- Step 2: Repo (shown only when project selected and > 1 repo) -->
+                <div x-show="azurePickRepos.length > 1" class="flex flex-col gap-1">
+                  <label class="text-[0.65rem] text-neutral-500 uppercase tracking-widest">Repository</label>
+                  <select x-model="azurePickRepoId" @change="onAzureRepoSelect()"
+                    class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition">
+                    <option value="">— select repo —</option>
+                    <template x-for="r in azurePickRepos" :key="r.id">
+                      <option :value="r.id" x-text="r.name"></option>
+                    </template>
+                  </select>
+                </div>
+                <!-- Auto-selected single repo hint -->
+                <div x-show="azurePickRepos.length === 1" class="text-[0.7rem] text-neutral-500">
+                  Repo: <span class="text-neutral-300" x-text="azurePickRepos[0]?.name"></span>
+                </div>
+
+                <!-- Step 3: Branch + Add -->
+                <div class="flex gap-2 items-end">
+                  <div class="flex-1 flex flex-col gap-1">
+                    <label class="text-[0.65rem] text-neutral-500 uppercase tracking-widest">Branch</label>
+                    <select x-model="azurePickBranch"
+                      :disabled="!azurePickBranches.length"
+                      class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition disabled:opacity-40">
+                      <option value="" x-text="azurePickRepoId ? '— select branch —' : '— pick project first —'"></option>
+                      <template x-for="b in azurePickBranches" :key="b">
+                        <option :value="b" x-text="b"></option>
+                      </template>
+                    </select>
+                  </div>
+                  <button
+                    @click="addAzureWatch()"
+                    :disabled="!azurePickProject || !azurePickRepoId || !azurePickBranch"
+                    class="bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors shrink-0"
+                  >+ Add</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider: Watch list -->
+            <div class="border-t border-neutral-800 pt-1">
+              <div class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500 mb-2">Watched branches</div>
+              <div class="flex flex-col gap-1" x-show="azureWatches.length > 0">
+                <template x-for="(watch, idx) in azureWatches" :key="idx">
+                  <div class="flex items-center justify-between bg-neutral-800 rounded-md px-3 py-1.5 group">
+                    <div class="text-xs flex items-center gap-1 min-w-0">
+                      <span class="text-neutral-500 truncate" x-text="watch.project"></span>
+                      <span class="text-neutral-700 shrink-0">/</span>
+                      <span class="text-neutral-300 font-medium truncate" x-text="watch.repoName"></span>
+                      <span class="text-neutral-700 shrink-0">/</span>
+                      <span class="text-neutral-200 shrink-0" x-text="watch.branch"></span>
+                    </div>
+                    <button @click="removeAzureWatch(idx)"
+                      class="text-neutral-700 hover:text-red-400 text-sm leading-none ml-3 shrink-0 transition-colors"
+                      title="Remove">&#10005;</button>
+                  </div>
+                </template>
+              </div>
+              <div x-show="!azureWatches.length" class="text-[0.7rem] text-neutral-600">No branches watched yet.</div>
+            </div>
+
+          </div>
+        </template>
+
+      </div>
+
+      <!-- Footer: msg + save -->
+      <div class="flex items-center justify-between px-6 py-4 border-t border-neutral-800 shrink-0">
+        <span class="text-xs" :class="settingsMsgOk ? 'text-green-400' : 'text-red-400'" x-text="settingsMsg"></span>
+        <button @click="saveSettings()" class="bg-blue-700 hover:bg-blue-600 text-white text-sm font-semibold px-4 py-1.5 rounded-md transition-colors">Save</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

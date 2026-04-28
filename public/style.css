@@ -1,0 +1,17 @@
+[x-cloak] { display: none; }
+
+/* ── Thin scrollbars ─────────────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: #404040 transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #404040; border-radius: 3px; }
+
+/* ── Description body ────────────────────────────────────── */
+.desc-body p { margin-bottom: 0.5rem; }
+.desc-body ul, .desc-body ol { margin-bottom: 0.5rem; padding-left: 1.5rem; }
+.desc-body li { margin-bottom: 0.15rem; }
+.desc-body h1, .desc-body h2, .desc-body h3 { font-size: 0.9rem; font-weight: 600; margin: 0.75rem 0 0.35rem; }
+.desc-body code { background: #262626; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.8em; font-family: monospace; }
+.desc-body pre { background: #262626; padding: 0.75rem; border-radius: 6px; overflow-x: auto; margin-bottom: 0.5rem; font-size: 0.8em; }
+.desc-body a { color: #60a5fa; }
+.desc-body img { max-width: 100%; height: auto; }
