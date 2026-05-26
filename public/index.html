@@ -10,6 +10,7 @@
   <script defer src="js/settings.js"></script>
   <script defer src="js/dev.js"></script>
   <script defer src="js/azure.js"></script>
+  <script defer src="js/buildFix.js"></script>
   <script defer src="app.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="style.css" />
@@ -49,7 +50,7 @@
 
       <!-- One group per watch -->
       <template x-for="watch in azureStatus" :key="watch.repoName + '/' + watch.branch">
-        <div class="flex items-center gap-1.5 shrink-0">
+        <div class="relative group flex items-center gap-1.5 shrink-0">
           <!-- label -->
           <span
             class="text-[0.62rem] text-neutral-500 whitespace-nowrap"
@@ -75,6 +76,13 @@
           </template>
           <template x-if="!watch.stages || !watch.stages.length">
             <span class="text-[0.62rem] text-neutral-700">—</span>
+          </template>
+          <!-- Fix Build button: hover-reveal when there are red stages -->
+          <template x-if="watch.stages && watch.stages.some(s => s.colour === 'red') && watch.buildId">
+            <button
+              @click.prevent="openBuildFix(watch)"
+              class="opacity-0 group-hover:opacity-100 transition-opacity text-[0.6rem] font-semibold text-red-400 hover:text-red-300 whitespace-nowrap px-1.5 py-0.5 rounded border border-red-800/50 hover:border-red-600/50"
+            >Fix &#8594;</button>
           </template>
         </div>
       </template>
@@ -538,6 +546,171 @@
       <div class="flex items-center justify-between px-6 py-4 border-t border-neutral-800 shrink-0">
         <span class="text-xs" :class="settingsMsgOk ? 'text-green-400' : 'text-red-400'" x-text="settingsMsg"></span>
         <button @click="saveSettings()" class="bg-blue-700 hover:bg-blue-600 text-white text-sm font-semibold px-4 py-1.5 rounded-md transition-colors">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Fix Build modal ────────────────────────────────── -->
+  <div
+    x-show="buildFixOpen"
+    x-cloak
+    x-transition:enter="transition ease-out duration-150"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-100"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    @click.self="buildFixOpen = false"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+    style="display:none"
+  >
+    <div
+      x-transition:enter="transition ease-out duration-150"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition ease-in duration-100"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+      class="bg-neutral-900 border border-neutral-800 rounded-xl w-full max-w-3xl mx-4 flex flex-col shadow-2xl max-h-[90vh]"
+      @click.stop
+    >
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-neutral-800 shrink-0">
+        <div class="flex items-center gap-3">
+          <strong class="text-sm font-semibold">Fix Build</strong>
+          <span
+            x-show="buildFixWatch"
+            class="text-xs text-neutral-500"
+            x-text="buildFixWatch ? (buildFixWatch.repoName + ' / ' + buildFixWatch.branch) : ''"
+          ></span>
+        </div>
+        <button @click="buildFixOpen = false" class="text-neutral-500 hover:text-neutral-200 text-sm leading-none transition-colors" title="Close">&#10005;</button>
+      </div>
+
+      <!-- Body -->
+      <div class="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+
+        <!-- Loading -->
+        <div x-show="buildFixLoading" class="flex items-center justify-center gap-2 py-10 text-sm text-neutral-400">
+          <div class="w-2.5 h-2.5 rounded-full bg-neutral-600 animate-pulse"></div>
+          <div class="w-2.5 h-2.5 rounded-full bg-neutral-600 animate-pulse" style="animation-delay:.15s"></div>
+          <div class="w-2.5 h-2.5 rounded-full bg-neutral-600 animate-pulse" style="animation-delay:.3s"></div>
+          <span>Fetching build logs&hellip;</span>
+        </div>
+
+        <!-- Error -->
+        <div x-show="!buildFixLoading && buildFixContext?.error" class="flex flex-col gap-3">
+          <div class="text-red-400 text-sm" x-text="'Error: ' + buildFixContext?.error"></div>
+          <button
+            @click="loadBuildContext(buildFixWatch.project, buildFixWatch.buildId)"
+            class="self-start text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >&#8635; Retry</button>
+        </div>
+
+        <!-- Content -->
+        <template x-if="!buildFixLoading && buildFixContext && !buildFixContext.error">
+          <div class="flex flex-col gap-5">
+
+            <!-- Build info -->
+            <div class="flex items-start justify-between gap-4">
+              <div class="text-xs text-neutral-400 flex flex-col gap-1">
+                <span>Pipeline: <span class="text-neutral-200" x-text="buildFixContext.definitionName"></span></span>
+                <span>Branch: <span class="text-neutral-200" x-text="buildFixContext.branch"></span></span>
+                <span>Commit: <span class="font-mono text-neutral-200" x-text="buildFixContext.commitShort"></span> &middot; by <span class="text-neutral-200" x-text="buildFixContext.requestedFor"></span></span>
+              </div>
+              <a
+                :href="buildFixWatch?.buildUrl || '#'"
+                target="_blank"
+                rel="noopener"
+                class="text-xs text-neutral-500 hover:text-neutral-200 transition-colors whitespace-nowrap shrink-0"
+              >&#8599; Open in Azure</a>
+            </div>
+
+            <!-- Failed tasks -->
+            <div class="flex flex-col gap-3">
+              <div class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Failed tasks</div>
+              <template x-for="(task, idx) in buildFixContext.failedTasks" :key="idx">
+                <div class="flex flex-col gap-1.5">
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-red-500 shrink-0"></span>
+                    <span class="text-neutral-200 font-medium" x-text="task.taskName"></span>
+                    <span class="text-neutral-600">&mdash;</span>
+                    <span class="text-neutral-500" x-text="task.stageName"></span>
+                  </div>
+                  <pre
+                    class="bg-neutral-950 border border-neutral-800 rounded-md p-3 text-[0.7rem] text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all max-h-52 overflow-y-auto leading-relaxed"
+                    x-text="task.logLines"
+                  ></pre>
+                </div>
+              </template>
+              <div
+                x-show="!buildFixContext.failedTasks || buildFixContext.failedTasks.length === 0"
+                class="text-xs text-neutral-600"
+              >No failed tasks found.</div>
+            </div>
+
+            <!-- Additional instructions -->
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-semibold text-neutral-400">Additional instructions</label>
+              <textarea
+                x-model="buildFixInstructions"
+                rows="3"
+                placeholder="e.g. The test was recently added, focus on the implementation..."
+                class="w-full bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 resize-y transition"
+              ></textarea>
+            </div>
+
+            <!-- Launch bar -->
+            <div class="flex flex-wrap items-end gap-3">
+              <!-- Mode toggle -->
+              <div class="flex w-fit rounded-md border border-neutral-700 overflow-hidden shrink-0">
+                <button @click="buildFixMode = 'dev'" :class="buildFixMode === 'dev' ? 'bg-blue-950/60 text-blue-300 font-semibold' : 'text-neutral-500 hover:text-neutral-300'" class="text-xs px-4 py-1.5 border-r border-neutral-700 transition-colors">&#9654; Dev</button>
+                <button @click="buildFixMode = 'plan'" :class="buildFixMode === 'plan' ? 'bg-blue-950/60 text-blue-300 font-semibold' : 'text-neutral-500 hover:text-neutral-300'" class="text-xs px-4 py-1.5 transition-colors">&#128196; Plan</button>
+              </div>
+
+              <!-- Repo selector -->
+              <div class="flex-1 min-w-[160px]">
+                <label class="block text-xs font-semibold text-neutral-400 mb-1">Project repo</label>
+                <select
+                  x-model="buildFixRepo"
+                  class="w-full bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
+                >
+                  <option value="">— select repo —</option>
+                  <template x-for="repo in repos" :key="repo">
+                    <option :value="repo" x-text="repo"></option>
+                  </template>
+                </select>
+              </div>
+
+              <!-- Fix Build button -->
+              <div class="relative group inline-flex">
+                <button
+                  @click="launchBuildFix()"
+                  :disabled="!buildFixRepo || buildFixResult?.launching === true"
+                  class="bg-red-700 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2 rounded-md whitespace-nowrap transition-colors"
+                  x-text="buildFixResult?.launching === true ? 'Launching...' : (buildFixMode === 'plan' ? '📄 Plan Fix' : '▶ Fix Build')"
+                ></button>
+                <div
+                  :class="(!buildFixRepo || buildFixResult?.launching === true) ? 'group-hover:opacity-100' : 'hidden'"
+                  class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs rounded whitespace-nowrap pointer-events-none opacity-0 transition-opacity z-10"
+                  x-text="!buildFixRepo ? 'Select a repo first' : 'Launch in progress...'"
+                ></div>
+              </div>
+            </div>
+
+            <!-- Result -->
+            <div x-show="buildFixResult && !buildFixResult.launching" class="text-sm">
+              <div x-show="buildFixResult?.error" class="text-red-400" x-text="'Error: ' + buildFixResult?.error"></div>
+              <div x-show="buildFixResult?.ok" class="text-green-400">&#10003; Claude Code launched in <strong x-text="buildFixRepo"></strong></div>
+              <div x-show="buildFixResult && !buildFixResult.ok && !buildFixResult.error">
+                <span class="text-neutral-500">Terminal not found &mdash; run manually:</span>
+                <pre class="mt-2 bg-neutral-950 border border-neutral-800 rounded-md p-3 text-xs text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all" x-text="buildFixResult?.manual || ''"></pre>
+              </div>
+            </div>
+
+          </div>
+        </template>
+
       </div>
     </div>
   </div>

@@ -125,13 +125,17 @@ function app() {
       },
 
       handleKeydown(e) {
-        if (e.key === 'Escape' && this.settingsOpen) this.settingsOpen = false;
+        if (e.key === 'Escape') {
+          if (this.buildFixOpen) { this.buildFixOpen = false; return; }
+          if (this.settingsOpen) this.settingsOpen = false;
+        }
       },
     },
     ApiMethods,
     SettingsMethods,
     DevMethods,
     UIHelpers,
-    AzureMethods
+    AzureMethods,
+    BuildFixMethods
   );
 }

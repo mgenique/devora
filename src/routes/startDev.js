@@ -106,6 +106,84 @@ router.post('/start-dev', async (req, res) => {
 
   const manualCmd = `cd "${projectPosixPath}" && claude "${claudePrompt.replace(/"/g, '\\"')}"`;
 
+  launchTerminal(scriptWinPath, manualCmd, res);
+});
+
+// ── POST /api/fix-build ───────────────────────────────────────────────────
+
+function projectUsesSpotless(projectWinPath) {
+  try {
+    const pomPath = path.join(projectWinPath, 'pom.xml');
+    if (!fs.existsSync(pomPath)) return false;
+    return fs.readFileSync(pomPath, 'utf8').toLowerCase().includes('spotless');
+  } catch { return false; }
+}
+
+router.post('/fix-build', (req, res) => {
+  const config = getConfig();
+  const { buildContext, instructions, repo, mode, suggestCommit, commitFormat } = req.body;
+
+  if (!repo) return res.status(400).json({ error: 'No repo selected' });
+
+  const projectWinPath   = path.join(config.reposPath, repo);
+  const projectPosixPath = toPosix(projectWinPath);
+
+  const hasBuildStageFailure = (buildContext.failedTasks || []).some(t =>
+    /build/i.test(t.stageName || '') || /build/i.test(t.taskName || '')
+  );
+  const usesSpotless = hasBuildStageFailure && projectUsesSpotless(projectWinPath);
+
+  const contextLines = [
+    `# Fix Build #${buildContext.buildId}`,
+    ``,
+    `## Build info`,
+    `- Pipeline: ${buildContext.definitionName}`,
+    `- Branch: ${buildContext.branch}`,
+    `- Triggered by: ${buildContext.requestedFor}`,
+    `- Commit: ${buildContext.commitShort}`,
+    ``,
+    `## Failed tasks`,
+    ...(buildContext.failedTasks || []).flatMap(t => [
+      ``,
+      `### ${t.taskName}  (stage: ${t.stageName})`,
+      '```',
+      t.logLines,
+      '```',
+    ]),
+    ...(usesSpotless ? [
+      ``,
+      `## Hint: Spotless detected`,
+      `This project uses the Spotless Maven plugin. If the failure is a code-formatting check, run \`mvn spotless:apply\` to auto-fix formatting before re-building.`,
+    ] : []),
+    ...(instructions ? [``, `## Additional instructions`, instructions] : []),
+    ``,
+    `Analyse the failures above, find the root cause in this repository, and fix the code.`,
+  ];
+
+  fs.writeFileSync(path.join(projectWinPath, '.devora-context.md'), contextLines.join('\n'));
+
+  const isPlan       = mode === 'plan';
+  const commitSuffix = (!isPlan && suggestCommit && commitFormat)
+    ? ` When you have finished fixing, suggest a commit message to copy-paste. Use exactly this format: ${commitFormat}`
+    : '';
+  const spotlessSuffix = usesSpotless
+    ? ` This project uses Spotless — if the failure is a formatting check, run \`mvn spotless:apply\` first.`
+    : '';
+  const claudePrompt = isPlan
+    ? `Read .devora-context.md for the failing build context, then enter plan mode and produce a step-by-step fix plan. Do not write any code yet.`
+    : `Read .devora-context.md and fix the failing build.${spotlessSuffix}${commitSuffix}`;
+
+  const script       = `#!/bin/bash\ncd "${projectPosixPath}"\nclaude "${claudePrompt.replace(/"/g, '\\"')}"\n`;
+  const scriptWinPath = path.join(projectWinPath, '.devora-start.sh');
+  fs.writeFileSync(scriptWinPath, script);
+
+  const manualCmd = `cd "${projectPosixPath}" && claude "${claudePrompt.replace(/"/g, '\\"')}"`;
+  launchTerminal(scriptWinPath, manualCmd, res);
+});
+
+// ── Terminal launcher (shared) ────────────────────────────────────────────
+
+function launchTerminal(scriptPath, manualCmd, res) {
   if (process.platform === 'win32') {
     const gitBash = [
       'C:\\Program Files\\Git\\bin\\bash.exe',
@@ -114,8 +192,7 @@ router.post('/start-dev', async (req, res) => {
 
     if (!gitBash) return res.json({ ok: false, manual: manualCmd });
 
-    const scriptPosixPath = toPosix(scriptWinPath);
-    exec(`start "" "${gitBash}" "${scriptPosixPath}"`, (err) => {
+    exec(`start "" "${gitBash}" "${toPosix(scriptPath)}"`, (err) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ ok: true });
     });
@@ -123,6 +200,7 @@ router.post('/start-dev', async (req, res) => {
     const TERMINALS = [
       { bin: 'alacritty',      args: s => ['-e', 'bash', s] },
       { bin: 'gnome-terminal', args: s => ['--', 'bash', s] },
+      { bin: 'foot',           args: s => ['bash', s] },
       { bin: 'xterm',          args: s => ['-e', 'bash', s] },
       { bin: 'konsole',        args: s => ['-e', 'bash', s] },
       { bin: 'xfce4-terminal', args: s => ['--command', `bash ${s}`] },
@@ -134,10 +212,10 @@ router.post('/start-dev', async (req, res) => {
 
     if (!term) return res.json({ ok: false, manual: manualCmd });
 
-    const child = spawn(term.bin, term.args(scriptWinPath), { detached: true, stdio: 'ignore' });
+    const child = spawn(term.bin, term.args(scriptPath), { detached: true, stdio: 'ignore' });
     child.unref();
     res.json({ ok: true });
   }
-});
+}
 
 module.exports = router;
