@@ -11,11 +11,13 @@ var SettingsMethods = {
     const cfgPromise    = this.api('/api/config');
     const boardsPromise = this.api('/api/boards');
     const azurePromise  = this.api('/api/azure/config');
+    const sonarPromise  = this.api('/api/sonar/config');
 
     let savedBoardId = '';
     try {
       const cfg          = await cfgPromise;
       this.reposPath     = cfg.reposPath     || '';
+      this.designSystemPath = cfg.designSystemPath || '';
       this.hasToken      = cfg.hasToken      || false;
       this.apiToken      = '';
       this.suggestCommit = cfg.suggestCommit ?? true;
@@ -37,6 +39,14 @@ var SettingsMethods = {
       this.azurePat     = '';
       this.azureWatches = az.watches || [];
     } catch (_) {}
+
+    try {
+      const sq           = await sonarPromise;
+      this.sonarBaseUrl  = sq.baseUrl   || '';
+      this.sonarHasToken = sq.hasToken  || false;
+      this.sonarToken    = '';
+      this.sonarProjects = (sq.projects || []).map(p => ({ ...p }));
+    } catch (_) {}
   },
 
   async saveSettings() {
@@ -44,6 +54,7 @@ var SettingsMethods = {
     try {
       const jiraBody = {
         reposPath:     this.reposPath,
+        designSystemPath: this.designSystemPath,
         boardId:       this.boardId,
         suggestCommit: this.suggestCommit,
         commitFormat:  this.commitFormat,
@@ -55,6 +66,9 @@ var SettingsMethods = {
       };
       if (this.azurePat.trim()) azureBody.pat = this.azurePat.trim();
 
+      const sonarBody = { baseUrl: this.sonarBaseUrl, projects: this.sonarProjects };
+      if (this.sonarToken.trim()) sonarBody.token = this.sonarToken.trim();
+
       await Promise.all([
         this.api('/api/config', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -64,10 +78,14 @@ var SettingsMethods = {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(azureBody),
         }),
+        this.api('/api/sonar/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sonarBody),
+        }),
       ]);
 
       this.repos = await this.api('/api/repos');
-      await Promise.all([this.loadSprint(), this.loadAzureStatus()]);
+      await Promise.all([this.loadSprint(), this.loadAzureStatus(), this.loadSonarCoverage()]);
 
       this.settingsMsg   = 'Saved.';
       this.settingsMsgOk = true;

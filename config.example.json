@@ -12,7 +12,15 @@
       { "project": "my-project", "repoId": "uuid-here", "repoName": "my-repo", "branch": "master" }
     ]
   },
+  "sonar": {
+    "baseUrl": "http://sonarqube.yourcompany.com",
+    "token": "your-sonar-token-here",
+    "projects": [
+      { "name": "My App", "key": "com.example:my-app" }
+    ]
+  },
   "reposPath": "C:/javadev/repos",
+  "designSystemPath": "C:/javadev/repos/design-system",
   "port": 3000,
   "proxy": "http://proxy-host:port"
 }

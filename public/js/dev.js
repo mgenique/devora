@@ -35,10 +35,13 @@ var DevMethods = {
           attachments,
           mode:              this.devMode,
           repo:              this.selectedRepo,
-          useOnemFrontend:   this.useOnemFrontend,
-          suggestCommit:     this.suggestCommit,
+          useOnemFrontend:             this.useOnemFrontend,
+          challengeDesignSystem:       this.challengeDesignSystem,
+          dangerouslyGrantPermissions: this.dangerouslyGrantPermissions,
+          suggestCommit:               this.suggestCommit,
           commitFormat:      this.commitFormat,
           comments:          selectedCommentData,
+          svgItems:          this.svgItems,
         }),
       });
       this.devResult = result;
@@ -51,5 +54,24 @@ var DevMethods = {
     const idx = this.selectedComments.indexOf(id);
     if (idx === -1) this.selectedComments.push(id);
     else this.selectedComments.splice(idx, 1);
+  },
+
+  addSvgItem() {
+    const title = this.svgNewTitle.trim();
+    const svg   = this.svgNewContent.trim();
+    if (!title || !svg) return;
+    this.svgItems.push({ title, svg });
+    this.svgNewTitle   = '';
+    this.svgNewContent = '';
+    this.saveSvgItems();
+  },
+
+  removeSvgItem(idx) {
+    this.svgItems.splice(idx, 1);
+    this.saveSvgItems();
+  },
+
+  saveSvgItems() {
+    localStorage.setItem('devora_svgs', JSON.stringify(this.svgItems));
   },
 };

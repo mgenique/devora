@@ -15,8 +15,9 @@ let jiraAuth = Buffer.from(`${config.jira.email}:${config.jira.apiToken}`).toStr
 function getConfig()   { return config; }
 function getJiraAuth() { return jiraAuth; }
 
-function saveConfig({ reposPath, boardId, apiToken, suggestCommit, commitFormat }) {
-  if (reposPath !== undefined)     config.reposPath     = reposPath;
+function saveConfig({ reposPath, designSystemPath, boardId, apiToken, suggestCommit, commitFormat }) {
+  if (reposPath !== undefined)        config.reposPath        = reposPath;
+  if (designSystemPath !== undefined) config.designSystemPath = designSystemPath;
   if (boardId)                     config.jira.boardId  = Number(boardId);
   if (apiToken) {
     config.jira.apiToken = apiToken;
@@ -40,4 +41,17 @@ function saveAzureConfig({ orgUrl, pat, watches }) {
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
-module.exports = { getConfig, getJiraAuth, saveConfig, getAzureConfig, saveAzureConfig };
+function getSonarConfig() {
+  return config.sonar || {};
+}
+
+// projects entries: { name, key }
+function saveSonarConfig({ baseUrl, token, projects }) {
+  if (!config.sonar) config.sonar = {};
+  if (baseUrl  !== undefined) config.sonar.baseUrl  = baseUrl;
+  if (token)                  config.sonar.token     = token;
+  if (projects !== undefined) config.sonar.projects  = projects;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+module.exports = { getConfig, getJiraAuth, saveConfig, getAzureConfig, saveAzureConfig, getSonarConfig, saveSonarConfig };

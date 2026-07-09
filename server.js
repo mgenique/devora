@@ -20,6 +20,7 @@ app.use('/api', require('./src/routes/boards'));
 app.use('/api', require('./src/routes/repos'));
 app.use('/api', require('./src/routes/startDev'));
 app.use('/api', require('./src/routes/azure'));
+app.use('/api', require('./src/routes/sonar'));
 
 const port = getConfig().port || 3000;
 app.listen(port, () => console.log(`Devora → http://localhost:${port}`));

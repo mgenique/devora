@@ -11,6 +11,7 @@
   <script defer src="js/dev.js"></script>
   <script defer src="js/azure.js"></script>
   <script defer src="js/buildFix.js"></script>
+  <script defer src="js/sonar.js"></script>
   <script defer src="app.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="style.css" />
@@ -84,6 +85,20 @@
               class="opacity-0 group-hover:opacity-100 transition-opacity text-[0.6rem] font-semibold text-red-400 hover:text-red-300 whitespace-nowrap px-1.5 py-0.5 rounded border border-red-800/50 hover:border-red-600/50"
             >Fix &#8594;</button>
           </template>
+        </div>
+      </template>
+    </div>
+
+    <!-- SonarQube coverage badges -->
+    <div x-show="sonarCoverage.length > 0" class="flex items-center gap-3 shrink-0 border-l border-neutral-800 pl-4">
+      <template x-for="proj in sonarCoverage" :key="proj.key">
+        <div class="flex items-center gap-1 shrink-0" :title="proj.error || (proj.coverage !== null ? proj.coverage + '%' : 'No data')">
+          <span class="text-[0.62rem] text-neutral-500 whitespace-nowrap" x-text="proj.name"></span>
+          <span
+            :class="sonarBadgeClass(proj.coverage)"
+            class="text-[0.7rem] font-semibold tabular-nums whitespace-nowrap"
+            x-text="proj.coverage !== null ? proj.coverage.toFixed(1) + '%' : '—'"
+          ></span>
         </div>
       </template>
     </div>
@@ -292,6 +307,34 @@
             <textarea x-model="instructions" rows="3" placeholder="e.g. Use the existing AuthService, don't modify the DB schema..." class="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 resize-y transition"></textarea>
           </div>
 
+          <!-- Design SVGs (Figma) -->
+          <div class="w-full">
+            <label class="block text-xs font-semibold text-neutral-400 mb-1">Design SVGs (Figma)</label>
+
+            <template x-if="svgItems.length > 0">
+              <div class="flex flex-col gap-1.5 mb-2">
+                <template x-for="(item, idx) in svgItems" :key="idx">
+                  <div class="flex items-center gap-2.5 bg-neutral-900 border border-neutral-800 rounded-md px-2.5 py-1.5">
+                    <div class="w-9 h-9 shrink-0 rounded bg-white/90 border border-neutral-700 overflow-hidden flex items-center justify-center p-0.5 [&_svg]:w-full [&_svg]:h-full" x-html="item.svg"></div>
+                    <span class="flex-1 text-sm text-neutral-300 truncate" x-text="item.title"></span>
+                    <span class="text-[0.68rem] text-neutral-600 whitespace-nowrap" x-text="(item.svg.length / 1024).toFixed(1) + ' KB'"></span>
+                    <button @click="removeSvgItem(idx)" class="text-neutral-600 hover:text-red-400 text-sm px-1.5 transition-colors" title="Remove SVG">&#10005;</button>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <div class="flex flex-col gap-1.5">
+              <input x-model="svgNewTitle" type="text" placeholder="Title, e.g. Search results card" class="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+              <textarea x-model="svgNewContent" rows="2" placeholder="Paste SVG code from Figma (right-click layer &rarr; Copy/Paste as &rarr; Copy as SVG)" class="w-full bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-xs font-mono text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 resize-y transition"></textarea>
+              <button
+                @click="addSvgItem()"
+                :disabled="!svgNewTitle.trim() || !svgNewContent.trim()"
+                class="self-start text-xs font-semibold px-3 py-1.5 rounded-md border border-neutral-700 text-neutral-300 hover:border-blue-600 hover:text-blue-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-neutral-700 disabled:hover:text-neutral-300 transition-colors"
+              >+ Add SVG</button>
+            </div>
+          </div>
+
           <!-- Repo select + Start button -->
           <div class="flex flex-wrap items-end gap-3">
             <div class="flex-1 min-w-[160px]">
@@ -305,6 +348,14 @@
               <label class="flex items-center gap-1.5 mt-1.5 cursor-pointer select-none">
                 <input type="checkbox" x-model="useOnemFrontend" class="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
                 <span :class="useOnemFrontend ? 'text-blue-400' : 'text-neutral-500'" class="text-[0.72rem] transition-colors">ONEM frontend skill</span>
+              </label>
+              <label class="flex items-center gap-1.5 mt-1 cursor-pointer select-none" title="If custom CSS is needed because the design system lacks a component, the AI asks you how to handle it (contact the DS team, build it locally, ...)">
+                <input type="checkbox" x-model="challengeDesignSystem" class="w-3.5 h-3.5 accent-purple-500 cursor-pointer" />
+                <span :class="challengeDesignSystem ? 'text-purple-400' : 'text-neutral-500'" class="text-[0.72rem] transition-colors">Challenge design system</span>
+              </label>
+              <label class="flex items-center gap-1.5 mt-1 cursor-pointer select-none" title="Passes --dangerously-skip-permissions to claude">
+                <input type="checkbox" x-model="dangerouslyGrantPermissions" class="w-3.5 h-3.5 accent-orange-500 cursor-pointer" />
+                <span :class="dangerouslyGrantPermissions ? 'text-orange-400' : 'text-neutral-500'" class="text-[0.72rem] transition-colors">Full permissions (dangerous)</span>
               </label>
             </div>
             <div class="relative group inline-flex">
@@ -327,7 +378,7 @@
             <div x-show="devResult?.error" class="text-red-400" x-text="'Error: ' + devResult?.error"></div>
             <div x-show="devResult?.ok" class="text-green-400">&#10003; Claude Code launched in <strong x-text="selectedRepo"></strong></div>
             <div x-show="devResult && !devResult.ok && !devResult.error">
-              <span class="text-neutral-500">Git Bash not found &mdash; run manually:</span>
+              <span class="text-neutral-500">Terminal not found &mdash; run manually:</span>
               <pre class="mt-2 bg-neutral-900 border border-neutral-800 rounded-md p-3 text-xs text-neutral-300 overflow-x-auto whitespace-pre-wrap break-all" x-text="devResult?.manual || ''"></pre>
             </div>
           </div>
@@ -383,6 +434,13 @@
             : 'border-b-2 border-transparent text-neutral-500 hover:text-neutral-300'"
           class="text-xs font-semibold px-4 py-2 -mb-px transition-colors"
         >Azure DevOps</button>
+        <button
+          @click="openSonarTab()"
+          :class="settingsTab === 'sonar'
+            ? 'border-b-2 border-blue-500 text-neutral-100'
+            : 'border-b-2 border-transparent text-neutral-500 hover:text-neutral-300'"
+          class="text-xs font-semibold px-4 py-2 -mb-px transition-colors"
+        >SonarQube</button>
       </div>
 
       <!-- Tab content -->
@@ -409,6 +467,13 @@
               <input type="text" x-model="reposPath" placeholder="C:/javadev/repos" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
             </div>
 
+            <!-- Design system repo path -->
+            <div class="flex flex-col gap-1">
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Design system repo</label>
+              <input type="text" x-model="designSystemPath" placeholder="C:/javadev/repos/design-system (optional)" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+              <p class="text-[0.68rem] text-neutral-600">When set, the AI compares design SVGs with the design system components and reuses them instead of writing custom CSS.</p>
+            </div>
+
             <!-- API token -->
             <div class="flex flex-col gap-1">
               <div class="flex items-baseline justify-between">
@@ -429,6 +494,65 @@
               <div x-show="suggestCommit">
                 <textarea x-model="commitFormat" rows="3" placeholder="e.g. feat(or fix): #TICKET-123: short title&#10;&#10;Brief description of what changed." class="w-full bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 resize-y transition"></textarea>
               </div>
+            </div>
+
+          </div>
+        </template>
+
+        <!-- ── SonarQube tab ── -->
+        <template x-if="settingsTab === 'sonar'">
+          <div class="flex flex-col gap-4">
+
+            <!-- Base URL -->
+            <div class="flex flex-col gap-1">
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">SonarQube URL</label>
+              <input type="text" x-model="sonarBaseUrl" placeholder="http://sonarqube.yourcompany.com" autocomplete="off"
+                class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+            </div>
+
+            <!-- Token -->
+            <div class="flex flex-col gap-1">
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">API token</label>
+              <input type="password" x-model="sonarToken"
+                :placeholder="sonarHasToken ? 'Leave blank to keep current' : 'Enter your SonarQube token'"
+                autocomplete="off"
+                class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+            </div>
+
+            <!-- Add project -->
+            <div class="border-t border-neutral-800 pt-1 flex flex-col gap-3">
+              <span class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Add project</span>
+              <div class="flex flex-col gap-2">
+                <input type="text" x-model="sonarNewName" placeholder="Display name (e.g. My App)" autocomplete="off"
+                  class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+                <div class="flex gap-2">
+                  <input type="text" x-model="sonarNewKey" placeholder="Project key (e.g. com.example:app)" autocomplete="off"
+                    class="flex-1 bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition"
+                    @keydown.enter.prevent="addSonarProject()" />
+                  <button @click="addSonarProject()" :disabled="!sonarNewName.trim() || !sonarNewKey.trim()"
+                    class="bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors shrink-0">+ Add</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Project list -->
+            <div class="border-t border-neutral-800 pt-1 flex flex-col gap-2">
+              <span class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Watched projects</span>
+              <div class="flex flex-col gap-1" x-show="sonarProjects.length > 0">
+                <template x-for="(proj, idx) in sonarProjects" :key="idx">
+                  <div class="flex items-center justify-between bg-neutral-800 rounded-md px-3 py-1.5 group">
+                    <div class="text-xs flex items-center gap-1.5 min-w-0">
+                      <span class="text-neutral-200 font-medium truncate" x-text="proj.name"></span>
+                      <span class="text-neutral-600 shrink-0">&mdash;</span>
+                      <span class="font-mono text-neutral-500 truncate text-[0.7rem]" x-text="proj.key"></span>
+                    </div>
+                    <button @click="removeSonarProject(idx)"
+                      class="text-neutral-700 hover:text-red-400 text-sm leading-none ml-3 shrink-0 transition-colors"
+                      title="Remove">&#10005;</button>
+                  </div>
+                </template>
+              </div>
+              <div x-show="!sonarProjects.length" class="text-[0.7rem] text-neutral-600">No projects added yet.</div>
             </div>
 
           </div>
@@ -680,6 +804,10 @@
                     <option :value="repo" x-text="repo"></option>
                   </template>
                 </select>
+                <label class="flex items-center gap-1.5 mt-1.5 cursor-pointer select-none" title="Passes --dangerously-skip-permissions to claude">
+                  <input type="checkbox" x-model="dangerouslyGrantPermissions" class="w-3.5 h-3.5 accent-orange-500 cursor-pointer" />
+                  <span :class="dangerouslyGrantPermissions ? 'text-orange-400' : 'text-neutral-500'" class="text-[0.72rem] transition-colors">Full permissions (dangerous)</span>
+                </label>
               </div>
 
               <!-- Fix Build button -->

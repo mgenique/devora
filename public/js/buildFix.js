@@ -46,6 +46,7 @@ var BuildFixMethods = {
           instructions:  this.buildFixInstructions,
           repo:          this.buildFixRepo,
           mode:          this.buildFixMode,
+          dangerouslyGrantPermissions: this.dangerouslyGrantPermissions,
           suggestCommit: this.suggestCommit,
           commitFormat:  this.commitFormat,
         }),

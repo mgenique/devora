@@ -13,8 +13,13 @@ function app() {
 
       devMode: 'dev',
       instructions: '',
+      svgItems: [],
+      svgNewTitle: '',
+      svgNewContent: '',
       selectedRepo: '',
       useOnemFrontend: false,
+      challengeDesignSystem: false,
+      dangerouslyGrantPermissions: false,
       devResult: null,
       selectedComments: [],
 
@@ -28,6 +33,7 @@ function app() {
       boards:        [],
       boardId:       '',
       reposPath:     '',
+      designSystemPath: '',
       apiToken:      '',
       hasToken:      false,
       suggestCommit: true,
@@ -50,6 +56,18 @@ function app() {
       // ── Azure topbar state ─────────────────────────────────
       azureStatus:  [],
       azureLoading: false,
+
+      // ── SonarQube topbar state ──────────────────────────────
+      sonarCoverage:  [],
+      sonarLoading:   false,
+
+      // SonarQube settings
+      sonarBaseUrl:   '',
+      sonarToken:     '',
+      sonarHasToken:  false,
+      sonarProjects:  [],
+      sonarNewName:   '',
+      sonarNewKey:    '',
 
       // ── Computed ───────────────────────────────────────────
       get filteredIssues() {
@@ -120,8 +138,19 @@ function app() {
         this.useOnemFrontend = localStorage.getItem('devora_onem_skill') === 'true';
         this.$watch('useOnemFrontend', val => localStorage.setItem('devora_onem_skill', val));
 
+        this.challengeDesignSystem = localStorage.getItem('devora_challenge_ds') === 'true';
+        this.$watch('challengeDesignSystem', val => localStorage.setItem('devora_challenge_ds', val));
+
+        this.dangerouslyGrantPermissions = localStorage.getItem('devora_dangerous_perms') === 'true';
+        this.$watch('dangerouslyGrantPermissions', val => localStorage.setItem('devora_dangerous_perms', val));
+
+        try { this.svgItems = JSON.parse(localStorage.getItem('devora_svgs')) || []; } catch { this.svgItems = []; }
+
         await this.loadAzureStatus();
         setInterval(() => this.loadAzureStatus(), 60000);
+
+        await this.loadSonarCoverage();
+        setInterval(() => this.loadSonarCoverage(), 5 * 60 * 1000);
       },
 
       handleKeydown(e) {
@@ -136,6 +165,7 @@ function app() {
     DevMethods,
     UIHelpers,
     AzureMethods,
-    BuildFixMethods
+    BuildFixMethods,
+    SonarMethods
   );
 }
