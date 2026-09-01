@@ -16,7 +16,7 @@ router.post('/start-dev', async (req, res) => {
   const config = getConfig();
   const {
     ticketKey, ticketTitle, ticketDescription, instructions,
-    attachments, mode, repo, useOnemFrontend, challengeDesignSystem,
+    attachments, mode, repo, useSkillFile, challengeDesignSystem,
     dangerouslyGrantPermissions,
     suggestCommit, commitFormat, comments, svgItems,
   } = req.body;
@@ -103,23 +103,30 @@ router.post('/start-dev', async (req, res) => {
 
   fs.writeFileSync(path.join(projectWinPath, '.devora-context.md'), context);
 
-  // Expand and write the ONEM frontend skill if requested
-  if (useOnemFrontend) {
+  // Expand and write the configured skill file if requested
+  const skillPath = (config.skillPath || '').trim();
+  const writeSkill = useSkillFile && !!skillPath;
+  if (writeSkill) {
     try {
-      const skillTemplatePath = path.join(__dirname, '..', '..', '.claude', 'commands', 'onem-frontend.md');
-      let skill = fs.readFileSync(skillTemplatePath, 'utf8');
+      let skill = fs.readFileSync(skillPath, 'utf8');
+      // Drop the front matter of a Claude Code command/skill file, if present
       skill = skill.replace(/^---\n[\s\S]*?\n---\n\n?/, '');
 
-      let components = '(component list unavailable)';
-      try {
-        const dsScript = path.join(__dirname, '..', '..', 'scripts', 'ds-components.js');
-        components = execSync(`node "${dsScript}"`, {
-          cwd:      projectWinPath,
-          encoding: 'utf8',
-          timeout:  15000,
-        }).trim();
-      } catch (_) {}
-      skill = skill.replace(/\$SHELL\([^)]*ds-components\.js[^)]*\)/, components);
+      // $DS_COMPONENTS expands to the design system's component list.
+      // Only run the lister when the skill actually asks for it.
+      if (/\$DS_COMPONENTS|\$SHELL\([^)]*ds-components\.js[^)]*\)/.test(skill)) {
+        let components = '(component list unavailable)';
+        try {
+          const dsScript = path.join(__dirname, '..', '..', 'scripts', 'ds-components.js');
+          components = execSync(`node "${dsScript}"`, {
+            cwd:      projectWinPath,
+            encoding: 'utf8',
+            timeout:  15000,
+          }).trim();
+        } catch (_) {}
+        skill = skill.replace(/\$SHELL\([^)]*ds-components\.js[^)]*\)/, components);
+        skill = skill.replace(/\$DS_COMPONENTS/g, components);
+      }
       skill = skill.replace('$ARGUMENTS', `${ticketKey} — ${ticketTitle}`);
 
       fs.writeFileSync(path.join(projectWinPath, '.devora-skill.md'), skill);
@@ -133,8 +140,8 @@ router.post('/start-dev', async (req, res) => {
   const commitSuffix = (!isPlan && suggestCommit && commitFormat)
     ? ` When you have finished implementing, suggest a commit message to copy-paste. Use exactly this format: ${commitFormat}`
     : '';
-  const skillPreamble = useOnemFrontend
-    ? 'Read `.devora-skill.md` first — it contains your Angular/ONEM frontend role, conventions, and available design system components. Then '
+  const skillPreamble = writeSkill
+    ? 'Read `.devora-skill.md` first — it contains your role, the project conventions to follow and, when applicable, the available design system components. Then '
     : '';
   const svgSuffix = savedSvgs.length
     ? ' Figma design SVGs are in .devora-svgs/ (see the Design References section) — use them as the design reference for the UI.'

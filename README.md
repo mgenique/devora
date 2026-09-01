@@ -44,9 +44,20 @@ Point Devora at your design system repo (Settings → *Design system repo*) and 
 
 Add the **Challenge design system** toggle and the AI won't silently write custom CSS when the design system has a gap — it stops and asks you how to handle it: contact the design system team, build a local one-off, or adapt the design.
 
-### 🅰️ ONEM frontend skill
+### 📝 Skill file
 
-For Angular projects using the `@onemrvapublic/design-system`, the **ONEM frontend skill** toggle expands a skill file into the repo before launch. It detects the exact design system version the target project depends on and lists the components available **at that git tag** (via `git ls-tree`, no checkout needed), so the AI never suggests components that don't exist in your version.
+Point Devora at a Markdown file describing your stack and conventions (Settings → *Skill file*), and the **Skill file** toggle expands it into the target repo as `.devora-skill.md` before launch — Claude is told to read it first. Use it for anything the AI can't infer from the code: framework version, import conventions, state management, i18n, testing rules.
+
+Two placeholders are expanded on the way in:
+
+| Placeholder | Replaced with |
+| --- | --- |
+| `$ARGUMENTS` | The ticket key and title |
+| `$DS_COMPONENTS` | The component list of your configured design system repo |
+
+`$DS_COMPONENTS` is version-aware: if you also set a **design system package** name, Devora resolves the exact version the target project depends on and lists the components available **at that git tag** (via `git ls-tree`, no checkout needed), so the AI never suggests components that don't exist in your version.
+
+Front matter is stripped, so a Claude Code slash-command file from `.claude/commands/` works as-is. See [`skill.example.md`](skill.example.md) for a starting point.
 
 ### 🔧 Azure DevOps build monitor + AI build fixing
 
@@ -60,7 +71,7 @@ Track any number of SonarQube projects; the top bar shows live coverage badges, 
 
 ### ⚙️ Settings UI
 
-Everything is configurable from the in-app settings modal — Jira board and API token, repos folder, design system repo, commit message format, Azure DevOps PAT and watched pipelines (with project/repo/branch pickers), SonarQube URL, token and projects. Secrets are write-only in the UI and stored in your local `config.json`.
+Everything is configurable from the in-app settings modal — Jira board and API token, repos folder, design system repo, skill file, commit message format, Azure DevOps PAT and watched pipelines (with project/repo/branch pickers), SonarQube URL, token and projects. Secrets are write-only in the UI and stored in your local `config.json`.
 
 ---
 
@@ -95,6 +106,9 @@ Open **http://localhost:3000** (or your configured port). You can complete most 
 | `jira.boardId` | Sprint board id (pickable in settings) |
 | `reposPath` | Folder containing your local git repos — its subfolders appear in the repo picker |
 | `designSystemPath` | *(optional)* Path to your design system repo; enables design-system-first AI instructions |
+| `designSystemPackage` | *(optional)* npm package name of the design system, e.g. `@acme/design-system` — makes the component list version-aware |
+| `designSystemComponentsDir` | *(optional)* Folder inside the design system repo holding one directory per component; auto-detected when omitted |
+| `skillPath` | *(optional)* Path to a Markdown skill file expanded into the repo as `.devora-skill.md` |
 | `azure.orgUrl` / `azure.pat` / `azure.watches` | Azure DevOps org, personal access token, and watched pipelines |
 | `sonar.baseUrl` / `sonar.token` / `sonar.projects` | SonarQube instance and tracked projects |
 | `suggestCommit` / `commitFormat` | Commit message suggestion toggle and template |
@@ -109,7 +123,7 @@ When launching a session, Devora drops working files into the **target** repo:
 .devora-context.md      # ticket / build context for the AI
 .devora-attachments/    # downloaded ticket screenshots
 .devora-svgs/           # your pasted Figma SVGs
-.devora-skill.md        # expanded ONEM frontend skill (if enabled)
+.devora-skill.md        # expanded skill file (if enabled)
 .devora-start.sh        # the launch script
 ```
 
@@ -135,7 +149,8 @@ ExecStart=/home/YOURUSER/.nvm/versions/node/v24.14.1/bin/node server.js
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
-Environment=NODE_EXTRA_CA_CERTS=/home/YOURUSER/.crt/rva-all.crt
+# If you sit behind a TLS-inspecting corporate proxy, point Node at your CA bundle:
+# Environment=NODE_EXTRA_CA_CERTS=/home/YOURUSER/.crt/corporate-ca.crt
 
 [Install]
 WantedBy=default.target

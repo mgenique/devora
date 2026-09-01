@@ -17,7 +17,10 @@ var SettingsMethods = {
     try {
       const cfg          = await cfgPromise;
       this.reposPath     = cfg.reposPath     || '';
-      this.designSystemPath = cfg.designSystemPath || '';
+      this.designSystemPath          = cfg.designSystemPath          || '';
+      this.designSystemPackage       = cfg.designSystemPackage       || '';
+      this.designSystemComponentsDir = cfg.designSystemComponentsDir || '';
+      this.skillPath        = cfg.skillPath || '';
       this.hasToken      = cfg.hasToken      || false;
       this.apiToken      = '';
       this.suggestCommit = cfg.suggestCommit ?? true;
@@ -35,6 +38,7 @@ var SettingsMethods = {
 
     try {
       const az          = await azurePromise;
+      this.azureOrgUrl  = az.orgUrl  || '';
       this.azureHasPat  = az.hasPat  || false;
       this.azurePat     = '';
       this.azureWatches = az.watches || [];
@@ -54,7 +58,10 @@ var SettingsMethods = {
     try {
       const jiraBody = {
         reposPath:     this.reposPath,
-        designSystemPath: this.designSystemPath,
+        designSystemPath:          this.designSystemPath,
+        designSystemPackage:       this.designSystemPackage,
+        designSystemComponentsDir: this.designSystemComponentsDir,
+        skillPath:     this.skillPath,
         boardId:       this.boardId,
         suggestCommit: this.suggestCommit,
         commitFormat:  this.commitFormat,

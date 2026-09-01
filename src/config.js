@@ -15,9 +15,15 @@ let jiraAuth = Buffer.from(`${config.jira.email}:${config.jira.apiToken}`).toStr
 function getConfig()   { return config; }
 function getJiraAuth() { return jiraAuth; }
 
-function saveConfig({ reposPath, designSystemPath, boardId, apiToken, suggestCommit, commitFormat }) {
+function saveConfig({
+  reposPath, designSystemPath, designSystemPackage, designSystemComponentsDir,
+  skillPath, boardId, apiToken, suggestCommit, commitFormat,
+}) {
   if (reposPath !== undefined)        config.reposPath        = reposPath;
   if (designSystemPath !== undefined) config.designSystemPath = designSystemPath;
+  if (designSystemPackage       !== undefined) config.designSystemPackage       = designSystemPackage;
+  if (designSystemComponentsDir !== undefined) config.designSystemComponentsDir = designSystemComponentsDir;
+  if (skillPath !== undefined)        config.skillPath        = skillPath;
   if (boardId)                     config.jira.boardId  = Number(boardId);
   if (apiToken) {
     config.jira.apiToken = apiToken;

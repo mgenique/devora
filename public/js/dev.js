@@ -35,7 +35,7 @@ var DevMethods = {
           attachments,
           mode:              this.devMode,
           repo:              this.selectedRepo,
-          useOnemFrontend:             this.useOnemFrontend,
+          useSkillFile:                this.useSkillFile,
           challengeDesignSystem:       this.challengeDesignSystem,
           dangerouslyGrantPermissions: this.dangerouslyGrantPermissions,
           suggestCommit:               this.suggestCommit,

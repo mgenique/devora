@@ -5,4 +5,6 @@ config.json
 .DS_Store
 debug.png
 *.md
+!README.md
+!skill.example.md
 .claude/settings.local.json

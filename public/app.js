@@ -17,7 +17,7 @@ function app() {
       svgNewTitle: '',
       svgNewContent: '',
       selectedRepo: '',
-      useOnemFrontend: false,
+      useSkillFile: false,
       challengeDesignSystem: false,
       dangerouslyGrantPermissions: false,
       devResult: null,
@@ -34,12 +34,16 @@ function app() {
       boardId:       '',
       reposPath:     '',
       designSystemPath: '',
+      designSystemPackage: '',
+      designSystemComponentsDir: '',
+      skillPath:     '',
       apiToken:      '',
       hasToken:      false,
       suggestCommit: true,
       commitFormat:  '',
 
       // Azure persistent settings
+      azureOrgUrl:  '',
       azurePat:     '',
       azureHasPat:  false,
       azureWatches: [],
@@ -130,13 +134,19 @@ function app() {
 
       // ── Init + keyboard ───────────────────────────────────
       async init() {
+        // The skill-file toggle needs to know whether a skill file is configured
+        try {
+          const cfg      = await this.api('/api/config');
+          this.skillPath = cfg.skillPath || '';
+        } catch (_) {}
+
         await this.loadSprint();
         const saved = localStorage.getItem('devora_repo');
         if (saved && this.repos.includes(saved)) this.selectedRepo = saved;
         this.$watch('selectedRepo', val => { if (val) localStorage.setItem('devora_repo', val); });
 
-        this.useOnemFrontend = localStorage.getItem('devora_onem_skill') === 'true';
-        this.$watch('useOnemFrontend', val => localStorage.setItem('devora_onem_skill', val));
+        this.useSkillFile = localStorage.getItem('devora_skill_file') === 'true';
+        this.$watch('useSkillFile', val => localStorage.setItem('devora_skill_file', val));
 
         this.challengeDesignSystem = localStorage.getItem('devora_challenge_ds') === 'true';
         this.$watch('challengeDesignSystem', val => localStorage.setItem('devora_challenge_ds', val));

@@ -345,9 +345,15 @@
                   <option :value="repo" x-text="repo"></option>
                 </template>
               </select>
-              <label class="flex items-center gap-1.5 mt-1.5 cursor-pointer select-none">
-                <input type="checkbox" x-model="useOnemFrontend" class="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
-                <span :class="useOnemFrontend ? 'text-blue-400' : 'text-neutral-500'" class="text-[0.72rem] transition-colors">ONEM frontend skill</span>
+              <label
+                class="flex items-center gap-1.5 mt-1.5 select-none"
+                :class="skillPath.trim() ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'"
+                :title="skillPath.trim()
+                  ? 'Expands the skill file configured in Settings into the repo as .devora-skill.md and tells the AI to read it first'
+                  : 'Set a skill file path in Settings to enable this'"
+              >
+                <input type="checkbox" x-model="useSkillFile" :disabled="!skillPath.trim()" class="w-3.5 h-3.5 accent-blue-500 cursor-pointer disabled:cursor-not-allowed" />
+                <span :class="useSkillFile && skillPath.trim() ? 'text-blue-400' : 'text-neutral-500'" class="text-[0.72rem] transition-colors">Skill file</span>
               </label>
               <label class="flex items-center gap-1.5 mt-1 cursor-pointer select-none" title="If custom CSS is needed because the design system lacks a component, the AI asks you how to handle it (contact the DS team, build it locally, ...)">
                 <input type="checkbox" x-model="challengeDesignSystem" class="w-3.5 h-3.5 accent-purple-500 cursor-pointer" />
@@ -464,14 +470,34 @@
             <!-- Repos path -->
             <div class="flex flex-col gap-1">
               <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Repos folder</label>
-              <input type="text" x-model="reposPath" placeholder="C:/javadev/repos" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+              <input type="text" x-model="reposPath" placeholder="/path/to/your/repos" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
             </div>
 
             <!-- Design system repo path -->
             <div class="flex flex-col gap-1">
               <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Design system repo</label>
-              <input type="text" x-model="designSystemPath" placeholder="C:/javadev/repos/design-system (optional)" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+              <input type="text" x-model="designSystemPath" placeholder="/path/to/design-system (optional)" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
               <p class="text-[0.68rem] text-neutral-600">When set, the AI compares design SVGs with the design system components and reuses them instead of writing custom CSS.</p>
+            </div>
+
+            <!-- Design system package + components dir -->
+            <div class="flex flex-col gap-1" x-show="designSystemPath.trim()" x-cloak>
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Design system package</label>
+              <input type="text" x-model="designSystemPackage" placeholder="@acme/design-system (optional)" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+              <p class="text-[0.68rem] text-neutral-600">npm package name. When set, the component list is read from the git tag matching the version the target project depends on.</p>
+            </div>
+
+            <div class="flex flex-col gap-1" x-show="designSystemPath.trim()" x-cloak>
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Design system components folder</label>
+              <input type="text" x-model="designSystemComponentsDir" placeholder="auto-detected — e.g. projects/acme/design-system" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+              <p class="text-[0.68rem] text-neutral-600">Folder inside the repo holding one directory per component. Leave blank to auto-detect.</p>
+            </div>
+
+            <!-- Skill file -->
+            <div class="flex flex-col gap-1">
+              <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Skill file</label>
+              <input type="text" x-model="skillPath" placeholder="/path/to/skill.md (optional)" autocomplete="off" class="bg-neutral-800 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition" />
+              <p class="text-[0.68rem] text-neutral-600">Markdown file describing your stack and conventions. Enable the <strong>Skill file</strong> toggle on a ticket to expand it into the repo as <code>.devora-skill.md</code>. See <code>skill.example.md</code>.</p>
             </div>
 
             <!-- API token -->
@@ -566,7 +592,7 @@
             <div class="flex flex-col gap-1">
               <div class="flex items-baseline justify-between">
                 <label class="text-[0.68rem] font-bold uppercase tracking-widest text-neutral-500">Personal access token</label>
-                <a href="https://dev.azure.com/rvaonem/_usersSettings/tokens" target="_blank" rel="noopener"
+                <a :href="(azureOrgUrl || 'https://dev.azure.com').replace(/\/+$/, '') + '/_usersSettings/tokens'" target="_blank" rel="noopener"
                   class="text-[0.68rem] text-blue-400 hover:text-blue-300 transition-colors">Get token ↗</a>
               </div>
               <input type="password" x-model="azurePat"

@@ -8,7 +8,10 @@ router.get('/config', (req, res) => {
   const config = getConfig();
   res.json({
     reposPath:        config.reposPath,
-    designSystemPath: config.designSystemPath || '',
+    designSystemPath:          config.designSystemPath          || '',
+    designSystemPackage:       config.designSystemPackage       || '',
+    designSystemComponentsDir: config.designSystemComponentsDir || '',
+    skillPath:     config.skillPath || '',
     boardId:       config.jira.boardId,
     hasToken:      !!config.jira.apiToken,
     suggestCommit: config.suggestCommit ?? true,

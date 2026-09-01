@@ -19,8 +19,11 @@
       { "name": "My App", "key": "com.example:my-app" }
     ]
   },
-  "reposPath": "C:/javadev/repos",
-  "designSystemPath": "C:/javadev/repos/design-system",
+  "reposPath": "/path/to/your/repos",
+  "designSystemPath": "/path/to/your/repos/design-system",
+  "designSystemPackage": "@acme/design-system",
+  "designSystemComponentsDir": "projects/acme/design-system",
+  "skillPath": "/path/to/your/skill.md",
   "port": 3000,
   "proxy": "http://proxy-host:port"
 }
